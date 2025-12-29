@@ -1,15 +1,43 @@
 function ColorMyPencils(color)
-	color = color or "rose-pine-moon"
-	vim.cmd.colorscheme(color)
+    color = color or "rose-pine-moon"
+    vim.cmd.colorscheme(color)
 
-	vim.api.nvim_set_hl(0, "Normal", { bg = "none" })
-	vim.api.nvim_set_hl(0, "NormalFloat", { bg = "none" })
+    vim.api.nvim_set_hl(0, "Normal", { bg = "none" })
+    vim.api.nvim_set_hl(0, "NormalFloat", { bg = "none" })
 end
 
 return {
 
     {
         "erikbackman/brightburn.vim",
+    },
+
+    {
+        "rebelot/kanagawa.nvim",
+        config = function()
+            require('kanagawa').setup({
+                compile = false,             -- enable compiling the colorscheme
+                undercurl = true,            -- enable undercurls
+                bold = true,
+                italic = {
+                    strings = false,
+                    emphasis = false,
+                    comments = false,
+                    operators = false,
+                    folds = false,
+                },
+                transparent = true,         -- do not set background color
+                dimInactive = false,         -- dim inactive window `:h hl-NormalNC`
+                terminalColors = true,       -- define vim.g.terminal_color_{0,17}
+                theme = "dragon",              -- Load "wave" theme
+                background = {               -- map the value of 'background' option to a theme
+                    dark = "dragon",           -- try "dragon" !
+                    light = "lotus"
+                },
+            })
+
+        end,
+
     },
 
     {
@@ -46,7 +74,7 @@ return {
                 palette_overrides = {},
                 overrides = {},
                 dim_inactive = false,
-                transparent_mode = true,
+                transparent_mode = false,
             })
         end,
     },
