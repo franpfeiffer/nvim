@@ -41,7 +41,7 @@ autocmd('BufEnter', {
         if vim.bo.filetype == "zig" then
             pcall(vim.cmd.colorscheme, "rose-pine-moon")
         else
-            pcall(vim.cmd.colorscheme, "kanagawa")
+            pcall(vim.cmd.colorscheme, "tokyonight-night")
         end
     end
 })
