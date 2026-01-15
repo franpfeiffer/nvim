@@ -27,6 +27,15 @@ return {
             vim.lsp.protocol.make_client_capabilities(),
             cmp_lsp.default_capabilities())
 
+        -- Asegurar soporte para additionalTextEdits (auto-imports)
+        capabilities.textDocument.completion.completionItem.resolveSupport = {
+            properties = {
+                "documentation",
+                "detail",
+                "additionalTextEdits",
+            },
+        }
+
         require("fidget").setup({})
         require("mason").setup()
         require("mason-lspconfig").setup({
@@ -84,6 +93,47 @@ return {
                     lspconfig.tailwindcss.setup({
                         capabilities = capabilities,
                         filetypes = { "html", "css", "scss", "javascript", "javascriptreact", "typescript", "typescriptreact", "vue", "svelte", "heex" },
+                    })
+                end,
+                ["vtsls"] = function()
+                    local lspconfig = require("lspconfig")
+                    lspconfig.vtsls.setup({
+                        capabilities = capabilities,
+                        init_options = {
+                            preferences = {
+                                includePackageJsonAutoImports = "on",
+                                autoImportFileExcludePatterns = { "**/dist/**", "**/.next/**" },
+                            },
+                        },
+                        settings = {
+                            typescript = {
+                                suggest = {
+                                    completeFunctionCalls = true,
+                                },
+                                updateImportsOnFileMove = { enabled = "always" },
+                                inlayHints = {
+                                    parameterNames = { enabled = "all" },
+                                    parameterTypes = { enabled = true },
+                                    variableTypes = { enabled = true },
+                                    propertyDeclarationTypes = { enabled = true },
+                                    functionLikeReturnTypes = { enabled = true },
+                                },
+                            },
+                            javascript = {
+                                suggest = {
+                                    completeFunctionCalls = true,
+                                },
+                                updateImportsOnFileMove = { enabled = "always" },
+                            },
+                            vtsls = {
+                                autoUseWorkspaceTsdk = true,
+                                experimental = {
+                                    completion = {
+                                        enableServerSideFuzzyMatch = true,
+                                    },
+                                },
+                            },
+                        },
                     })
                 end,
             }
