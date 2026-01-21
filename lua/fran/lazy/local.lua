@@ -9,7 +9,7 @@ return {
 }
 -- return {
 --     {
---         dir = "/home/fran/work/vfp-lsp/editors/neovim",  -- Fixed typo and pointing to neovim dir
+--         dir = "/home/fran/work/vfp-lsp/editors/neovim",
 --         ft = { "vfp", "foxpro" },
 --         config = function()
 --             require("vfp-lsp").setup({
