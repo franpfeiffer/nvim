@@ -38,7 +38,7 @@ autocmd({"BufWritePre"}, {
 autocmd('BufEnter', {
     group = FranGroup,
     callback = function()
-        pcall(vim.cmd.colorscheme, "rose-pine")
+        pcall(vim.cmd.colorscheme, "kanagawa")
     end
 })
 
