@@ -38,7 +38,7 @@ autocmd({"BufWritePre"}, {
 autocmd('BufEnter', {
     group = FranGroup,
     callback = function()
-        pcall(vim.cmd.colorscheme, "kanagawa")
+        pcall(vim.cmd.colorscheme, "tokyonight")
     end
 })
 
@@ -63,3 +63,30 @@ autocmd('LspAttach', {
 vim.g.netrw_browse_split = 0
 vim.g.netrw_banner = 0
 vim.g.netrw_winsize = 25
+
+-- Auto-configure 99 plugin with Claude Code provider
+-- This runs after all plugins are loaded
+vim.defer_fn(function()
+    local ok, _99 = pcall(require, "99")
+    if ok then
+        local cwd = vim.uv.cwd()
+        local basename = vim.fs.basename(cwd)
+        _99.setup({
+            provider = _99.ClaudeCodeProvider,
+            logger = {
+                level = _99.DEBUG,
+                path = "/tmp/" .. basename .. ".99.debug",
+                print_on_error = true,
+            },
+            completion = {
+                custom_rules = {},
+                files = {},
+                source = "cmp",
+            },
+            md_files = {
+                "AGENT.md",
+            },
+        })
+    end
+end, 100)
+
