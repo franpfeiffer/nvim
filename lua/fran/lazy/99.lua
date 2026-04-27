@@ -1,41 +1,8 @@
 return {
 	{
-		"ThePrimeagen/99",
+		"franpfeiffer/99",
 		config = function()
 			local _99 = require("99")
-			local Providers = require("99.providers")
-
-			local CodexProvider = setmetatable({}, { __index = Providers.OpenCodeProvider })
-
-			function CodexProvider._build_command(_, query, context)
-				return {
-					"env",
-					"-u",
-					"CODEX_SANDBOX_NETWORK_DISABLED",
-					"-u",
-					"CODEX_THREAD_ID",
-					"codex",
-					"exec",
-					"--skip-git-repo-check",
-					"-s",
-					"workspace-write",
-					"--color",
-					"never",
-					"-o",
-					context.tmp_file,
-					"-m",
-					context.model,
-					query,
-				}
-			end
-
-			function CodexProvider._get_provider_name()
-				return "CodexProvider"
-			end
-
-			function CodexProvider._get_default_model()
-				return "gpt-5.4"
-			end
 
             -- For logging that is to a file if you wish to trace through requests
             -- for reporting bugs, i would not rely on this, but instead the provided
@@ -43,7 +10,7 @@ return {
             local cwd = vim.uv.cwd()
             local basename = vim.fs.basename(cwd)
 			_99.setup({
-                provider = CodexProvider,
+                provider = _99.Providers.CodexProvider,
 				logger = {
 					level = _99.DEBUG,
 					path = "/tmp/" .. basename .. ".99.debug",
