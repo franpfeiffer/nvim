@@ -12,6 +12,7 @@ return {
 			_99.setup({
                 provider = _99.Providers.CodexProvider,
 				logger = {
+					type = "file",
 					level = _99.DEBUG,
 					path = "/tmp/" .. basename .. ".99.debug",
 					print_on_error = true,
