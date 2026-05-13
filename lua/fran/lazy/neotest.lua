@@ -9,6 +9,8 @@ return {
         "leoluz/nvim-dap-go",
     },
     config = function()
+        require("nio")
+
         require("neotest").setup({
             adapters = {
                 require("neotest-golang")({

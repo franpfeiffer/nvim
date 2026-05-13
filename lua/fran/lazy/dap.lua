@@ -55,6 +55,8 @@ return {
         "rcarriga/nvim-dap-ui",
         dependencies = { "mfussenegger/nvim-dap", "nvim-neotest/nvim-nio" },
         config = function()
+            require("nio")
+
             local dap = require("dap")
             local dapui = require("dapui")
             local function layout(name)
@@ -144,7 +146,7 @@ return {
     {
         "jay-babu/mason-nvim-dap.nvim",
         dependencies = {
-            "williamboman/mason.nvim",
+            "mason-org/mason.nvim",
             "mfussenegger/nvim-dap",
             "neovim/nvim-lspconfig",
         },

@@ -24,13 +24,12 @@ return {
                 -- `false` will disable the whole extension
                 enable = true,
                 disable = function(lang, buf)
-                    if lang == "html" then
-                        print("disabled")
+                    if lang == "html" or lang == "markdown" or lang == "markdown_inline" then
                         return true
                     end
 
                     local max_filesize = 100 * 1024 -- 100 KB
-                    local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
+                    local ok, stats = pcall(vim.uv.fs_stat, vim.api.nvim_buf_get_name(buf))
                     if ok and stats and stats.size > max_filesize then
                         vim.notify(
                             "File larger than 100KB treesitter disabled for performance",
@@ -64,8 +63,12 @@ return {
 
     {
         "nvim-treesitter/nvim-treesitter-context",
-        after = "nvim-treesitter",
+        dependencies = { "nvim-treesitter/nvim-treesitter" },
         config = function()
+            local disabled_filetypes = {
+                markdown = true,
+            }
+
             require'treesitter-context'.setup{
                 enable = true, -- Enable this plugin (Can be enabled/disabled later via commands)
                 multiwindow = false, -- Enable multiwindow support.
@@ -79,7 +82,9 @@ return {
                 -- When separator is set, the context will only show up when there are at least 2 lines above cursorline.
                 separator = nil,
                 zindex = 20, -- The Z-index of the context window
-                on_attach = nil, -- (fun(buf: integer): boolean) return false to disable attaching
+                on_attach = function(buf)
+                    return not disabled_filetypes[vim.bo[buf].filetype]
+                end,
             }
         end
     }
