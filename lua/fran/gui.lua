@@ -83,111 +83,92 @@ end
 api.nvim_create_user_command("MdFloat", function(o) md_float(o.args) end, { nargs = "?", complete = "file" })
 vim.keymap.set("n", "<leader>mf", md_float, { desc = "Markdown float (open / jump)" })
 
--- reference arrows: lines from the symbol under the cursor to every ref in this file.
--- box-drawing chars on blank cells only, so code stays readable (teej's pixel curves need a real GUI)
-local ns = api.nvim_create_namespace("ref_arrows")
-local function clear_arrows()
-    for _, b in ipairs(api.nvim_list_bufs()) do api.nvim_buf_clear_namespace(b, ns, 0, -1) end
+-- reference arrows: real curved lines drawn OVER the code from the symbol under the cursor
+-- to every visible reference. svg -> png (magick) -> kitty graphics protocol (ghostty/kitty).
+-- inside tmux the escapes go through passthrough, enabled for this pane only at runtime.
+-- ponytail: cleared on any cursor move/scroll; assumes tmux status bar at the bottom.
+local IMG_ID, CW, CH = 4242, 10, 22 -- fake cell px size; terminal scales image to the grid
+local gen = 0
+
+local function tty(seq)
+    if vim.env.TMUX then seq = "\027Ptmux;" .. seq:gsub("\027", "\027\027") .. "\027\\" end
+    api.nvim_ui_send(seq)
 end
 
--- screen cells of a line: tabs expanded, wide chars padded with "" so we never draw over them
-local function cells(line, ts)
-    local out = {}
-    for ch in line:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
-        if ch == "\t" then
-            repeat out[#out + 1] = " " until #out % ts == 0
-        else
-            out[#out + 1] = ch
-            for _ = 2, vim.fn.strdisplaywidth(ch) do out[#out + 1] = "" end
-        end
+local function clear_arrows()
+    gen = gen + 1
+    tty("\027_Ga=d,d=i,i=" .. IMG_ID .. ",q=2\027\\")
+end
+
+local function show_png(png)
+    local top, left = 0, 0
+    if vim.env.TMUX then
+        local out = vim.fn.system({ "tmux", "display", "-p", "-t", vim.env.TMUX_PANE or "", "#{pane_top} #{pane_left}" })
+        top, left = out:match("(%d+) (%d+)")
+        top, left = tonumber(top) or 0, tonumber(left) or 0
     end
-    return out
+    local data = vim.base64.encode(png)
+    local seq = { ("\0277\027[%d;%dH"):format(top + 1, left + 1) }
+    for i = 1, #data, 4096 do
+        local chunk, more = data:sub(i, i + 4095), (i + 4096 <= #data) and 1 or 0
+        local head = i == 1
+            and ("a=T,f=100,q=2,C=1,i=%d,c=%d,r=%d,m=%d"):format(IMG_ID, vim.o.columns, vim.o.lines, more)
+            or ("m=%d"):format(more)
+        seq[#seq + 1] = "\027_G" .. head .. ";" .. chunk .. "\027\\"
+    end
+    seq[#seq + 1] = "\0278"
+    tty(table.concat(seq))
 end
 
 local function draw_arrows()
-    local buf, win = api.nvim_get_current_buf(), api.nvim_get_current_win()
-    api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    clear_arrows()
+    local my_gen, buf, win = gen, api.nvim_get_current_buf(), api.nvim_get_current_win()
     local client = vim.lsp.get_clients({ bufnr = buf, method = "textDocument/references" })[1]
     if not client then return end
     local params = vim.lsp.util.make_position_params(0, client.offset_encoding)
     params.context = { includeDeclaration = true }
     local r0, c0 = unpack(api.nvim_win_get_cursor(0))
-    r0 = r0 - 1
     client:request("textDocument/references", params, function(err, result)
-        if err or not result or not api.nvim_buf_is_valid(buf) or not api.nvim_win_is_valid(win) then return end
-        api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-        local enc, uri, ts = client.offset_encoding, vim.uri_from_bufnr(buf), vim.bo[buf].tabstop
-        local lines, grid = {}, {}
-        local function line(r)
-            if not lines[r] then
-                lines[r] = api.nvim_buf_get_lines(buf, r, r + 1, false)[1] or ""
-                grid[r] = cells(lines[r], ts)
-            end
-            return lines[r]
-        end
-
-        local anchor, refs, isref = nil, {}, {}
+        if my_gen ~= gen or err or not result or not api.nvim_win_is_valid(win) then return end
+        local uri, anchor, targets = vim.uri_from_bufnr(buf), nil, {}
         for _, loc in ipairs(result) do
             if loc.uri == uri then
                 local s, e = loc.range.start, loc.range["end"]
-                local l = line(s.line)
-                local sb = vim.str_byteindex(l, enc, s.character, false)
-                local eb = vim.str_byteindex(l, enc, e.character, false)
-                local ref = {
-                    row = s.line,
-                    sc = vim.fn.strdisplaywidth(l:sub(1, sb)),
-                    ec = vim.fn.strdisplaywidth(l:sub(1, eb)),
-                }
-                api.nvim_buf_set_extmark(buf, ns, s.line, sb, { end_col = eb, hl_group = "LspReferenceText" })
-                if s.line == r0 and sb <= c0 and c0 < eb then
-                    anchor = ref
-                else
-                    refs[#refs + 1], isref[s.line] = ref, true
+                local l = api.nvim_buf_get_lines(buf, s.line, s.line + 1, false)[1] or ""
+                local sb = vim.str_byteindex(l, client.offset_encoding, s.character, false)
+                local eb = vim.str_byteindex(l, client.offset_encoding, e.character, false)
+                local p = vim.fn.screenpos(win, s.line + 1, sb + 1)
+                local width = vim.fn.strdisplaywidth(l:sub(sb + 1, eb))
+                if s.line + 1 == r0 and sb <= c0 and c0 < eb then
+                    anchor = p.row > 0 and { x = (p.col - 1 + width / 2) * CW, y = p.row * CH - 2 } or nil
+                elseif p.row > 0 then
+                    targets[#targets + 1] = { x = (p.col - 1 + width / 2) * CW, y = (p.row - 1) * CH + 2 }
                 end
             end
         end
-        if not anchor or #refs == 0 then return end
+        if not anchor or #targets == 0 then return end
 
-        -- collect cells first so corners/heads win over the trunk, then draw
-        local marks = {}
-        local function put(r, c, ch)
-            marks[r] = marks[r] or {}
-            marks[r][c] = ch
+        local hl = api.nvim_get_hl(0, { name = "DiagnosticInfo", link = false })
+        local color = hl.fg and ("#%06x"):format(hl.fg) or "#7fb4ca"
+        local paths = {}
+        for _, t in ipairs(targets) do
+            local dx, dy = t.x - anchor.x, t.y - anchor.y
+            local cx, cy = (anchor.x + t.x) / 2 - dy * 0.3, (anchor.y + t.y) / 2 + dx * 0.3
+            paths[#paths + 1] = ('<path d="M%.1f %.1f Q%.1f %.1f %.1f %.1f" marker-end="url(#a)"/>')
+                :format(anchor.x, anchor.y, cx, cy, t.x, t.y)
         end
-        local T, minr, maxr = anchor.sc, r0, r0
-        for _, ref in ipairs(refs) do minr, maxr = math.min(minr, ref.row), math.max(maxr, ref.row) end
-        for r = minr, maxr do
-            if r ~= r0 and not isref[r] then put(r, T, "│") end
-        end
-        for _, ref in ipairs(refs) do
-            local r, down = ref.row, ref.row > r0
-            local far = r == (down and maxr or minr)
-            if ref.sc > T then
-                if r ~= r0 then put(r, T, far and (down and "╰" or "╭") or "├") end
-                for c = (r == r0 and anchor.ec or T + 1), ref.sc - 2 do put(r, c, "─") end
-                put(r, ref.sc - 1, "▶")
-            elseif ref.ec <= T then
-                if r ~= r0 then put(r, T, far and (down and "╯" or "╮") or "┤") end
-                for c = ref.ec + 1, (r == r0 and anchor.sc or T) - 1 do put(r, c, "─") end
-                put(r, ref.ec, "◀")
-            else
-                put(down and r - 1 or r + 1, T, down and "▼" or "▲")
-            end
-        end
-
-        local leftcol = api.nvim_win_call(win, vim.fn.winsaveview).leftcol
-        for r, row in pairs(marks) do
-            line(r)
-            for c, ch in pairs(row) do
-                local cell = grid[r][c + 1]
-                if c >= leftcol and (cell == nil or cell == " ") then
-                    api.nvim_buf_set_extmark(buf, ns, r, 0, {
-                        virt_text = { { ch, "DiagnosticInfo" } },
-                        virt_text_win_col = c - leftcol,
-                    })
-                end
-            end
-        end
+        local svg = table.concat({
+            ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d">'):format(vim.o.columns * CW, vim.o.lines * CH),
+            ('<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">'
+                .. '<path d="M0 0 L8 4 L0 8 z" fill="%s"/></marker></defs>'):format(color),
+            ('<g fill="none" stroke="%s" stroke-width="1.6" stroke-linecap="round" opacity="0.9">'):format(color),
+            table.concat(paths), "</g></svg>",
+        })
+        vim.system({ "magick", "-background", "none", "svg:-", "png:-" }, { stdin = svg, text = false }, function(res)
+            vim.schedule(function()
+                if my_gen == gen and res.code == 0 and #res.stdout > 0 then show_png(res.stdout) end
+            end)
+        end)
     end, buf)
 end
 local arrows_group = api.nvim_create_augroup("RefArrows", {})
@@ -197,7 +178,10 @@ api.nvim_create_user_command("RefArrows", function()
     api.nvim_clear_autocmds({ group = arrows_group })
     clear_arrows()
     if arrows_on then
+        if vim.env.TMUX then vim.fn.system({ "tmux", "set", "-p", "allow-passthrough", "on" }) end
         api.nvim_create_autocmd("CursorHold", { group = arrows_group, callback = draw_arrows })
+        api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "WinScrolled", "BufLeave", "FocusLost", "VimLeavePre", "VimResized" },
+            { group = arrows_group, callback = clear_arrows })
         draw_arrows()
     end
 end, {})
