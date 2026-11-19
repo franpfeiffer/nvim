@@ -182,3 +182,4 @@ api.nvim_create_user_command("Brainrot", function()
     -- Hyprland ignores --geometry for tiled windows, so float just this mpv window at runtime
     if vim.env.HYPRLAND_INSTANCE_SIGNATURE then hypr_place(rot.pid, prev, 30) end
 end, {})
+vim.keymap.set("n", "<leader>ob", "<cmd>Brainrot<cr>", { desc = "Brainrot video (toggle)" })
