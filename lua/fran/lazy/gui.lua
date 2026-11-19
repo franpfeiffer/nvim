@@ -28,7 +28,8 @@ return {
         "MeanderingProgrammer/render-markdown.nvim",
         ft = "markdown",
         dependencies = { "nvim-treesitter/nvim-treesitter" },
-        opts = {},
+        -- only render the <leader>mf preview float, normal buffers stay raw
+        opts = { ignore = function(buf) return not vim.b[buf].md_preview end },
     },
 
     -- visual LSP references/definitions peek
@@ -42,17 +43,4 @@ return {
         },
     },
 
-    -- linear (API key prompted on first use, stored in stdpath("data"), not in repo)
-    {
-        "rmanocha/linear-nvim",
-        dependencies = { "nvim-lua/plenary.nvim", "nvim-telescope/telescope.nvim", "stevearc/dressing.nvim" },
-        keys = {
-            { "<leader>li", function() require("linear-nvim").show_assigned_issues() end, desc = "Linear: my issues" },
-            { "<leader>lc", function() require("linear-nvim").create_issue() end, mode = { "n", "v" }, desc = "Linear: create issue" },
-            { "<leader>ld", function() require("linear-nvim").show_issue_details() end, desc = "Linear: issue details" },
-        },
-        config = function()
-            require("linear-nvim").setup()
-        end,
-    },
 }

@@ -1,6 +1,7 @@
 require("fran.set")
 require("fran.remap")
 require("fran.lazy_init")
+require("fran.gui")
 
 local function trim_empty_lines(lines)
     local start_idx = 1
