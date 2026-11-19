@@ -83,43 +83,110 @@ end
 api.nvim_create_user_command("MdFloat", function(o) md_float(o.args) end, { nargs = "?", complete = "file" })
 vim.keymap.set("n", "<leader>mf", md_float, { desc = "Markdown float (open / jump)" })
 
--- reference arrows: connector in the right margin from cursor to every ref in this file
+-- reference arrows: lines from the symbol under the cursor to every ref in this file.
+-- box-drawing chars on blank cells only, so code stays readable (teej's pixel curves need a real GUI)
 local ns = api.nvim_create_namespace("ref_arrows")
 local function clear_arrows()
     for _, b in ipairs(api.nvim_list_bufs()) do api.nvim_buf_clear_namespace(b, ns, 0, -1) end
 end
+
+-- screen cells of a line: tabs expanded, wide chars padded with "" so we never draw over them
+local function cells(line, ts)
+    local out = {}
+    for ch in line:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        if ch == "\t" then
+            repeat out[#out + 1] = " " until #out % ts == 0
+        else
+            out[#out + 1] = ch
+            for _ = 2, vim.fn.strdisplaywidth(ch) do out[#out + 1] = "" end
+        end
+    end
+    return out
+end
+
 local function draw_arrows()
-    local buf = api.nvim_get_current_buf()
+    local buf, win = api.nvim_get_current_buf(), api.nvim_get_current_win()
     api.nvim_buf_clear_namespace(buf, ns, 0, -1)
     local client = vim.lsp.get_clients({ bufnr = buf, method = "textDocument/references" })[1]
     if not client then return end
     local params = vim.lsp.util.make_position_params(0, client.offset_encoding)
     params.context = { includeDeclaration = true }
-    local cur = api.nvim_win_get_cursor(0)[1] - 1
+    local r0, c0 = unpack(api.nvim_win_get_cursor(0))
+    r0 = r0 - 1
     client:request("textDocument/references", params, function(err, result)
-        if err or not result or not api.nvim_buf_is_valid(buf) then return end
+        if err or not result or not api.nvim_buf_is_valid(buf) or not api.nvim_win_is_valid(win) then return end
         api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-        local uri, refs, first, last = vim.uri_from_bufnr(buf), {}, cur, cur
+        local enc, uri, ts = client.offset_encoding, vim.uri_from_bufnr(buf), vim.bo[buf].tabstop
+        local lines, grid = {}, {}
+        local function line(r)
+            if not lines[r] then
+                lines[r] = api.nvim_buf_get_lines(buf, r, r + 1, false)[1] or ""
+                grid[r] = cells(lines[r], ts)
+            end
+            return lines[r]
+        end
+
+        local anchor, refs, isref = nil, {}, {}
         for _, loc in ipairs(result) do
             if loc.uri == uri then
-                local l = loc.range.start.line
-                refs[l], first, last = true, math.min(first, l), math.max(last, l)
+                local s, e = loc.range.start, loc.range["end"]
+                local l = line(s.line)
+                local sb = vim.str_byteindex(l, enc, s.character, false)
+                local eb = vim.str_byteindex(l, enc, e.character, false)
+                local ref = {
+                    row = s.line,
+                    sc = vim.fn.strdisplaywidth(l:sub(1, sb)),
+                    ec = vim.fn.strdisplaywidth(l:sub(1, eb)),
+                }
+                api.nvim_buf_set_extmark(buf, ns, s.line, sb, { end_col = eb, hl_group = "LspReferenceText" })
+                if s.line == r0 and sb <= c0 and c0 < eb then
+                    anchor = ref
+                else
+                    refs[#refs + 1], isref[s.line] = ref, true
+                end
             end
         end
-        if first == last then return end
-        -- ponytail: margin sits after the longest line in range; off-screen if lines are wider than the window
-        local col = 0
-        for _, s in ipairs(api.nvim_buf_get_lines(buf, first, last + 1, false)) do
-            col = math.max(col, vim.fn.strdisplaywidth(s))
+        if not anchor or #refs == 0 then return end
+
+        -- collect cells first so corners/heads win over the trunk, then draw
+        local marks = {}
+        local function put(r, c, ch)
+            marks[r] = marks[r] or {}
+            marks[r][c] = ch
         end
-        for l = first, last do
-            local bar = l == first and "╮" or l == last and "╯" or "│"
-            local tip = l == cur and "●──" or refs[l] and "◀──" or "   "
-            if tip ~= "   " and bar == "│" then bar = "┤" end
-            api.nvim_buf_set_extmark(buf, ns, l, 0, {
-                virt_text = { { tip .. bar, l == cur and "DiagnosticWarn" or "DiagnosticInfo" } },
-                virt_text_win_col = col + 2,
-            })
+        local T, minr, maxr = anchor.sc, r0, r0
+        for _, ref in ipairs(refs) do minr, maxr = math.min(minr, ref.row), math.max(maxr, ref.row) end
+        for r = minr, maxr do
+            if r ~= r0 and not isref[r] then put(r, T, "│") end
+        end
+        for _, ref in ipairs(refs) do
+            local r, down = ref.row, ref.row > r0
+            local far = r == (down and maxr or minr)
+            if ref.sc > T then
+                if r ~= r0 then put(r, T, far and (down and "╰" or "╭") or "├") end
+                for c = (r == r0 and anchor.ec or T + 1), ref.sc - 2 do put(r, c, "─") end
+                put(r, ref.sc - 1, "▶")
+            elseif ref.ec <= T then
+                if r ~= r0 then put(r, T, far and (down and "╯" or "╮") or "┤") end
+                for c = ref.ec + 1, (r == r0 and anchor.sc or T) - 1 do put(r, c, "─") end
+                put(r, ref.ec, "◀")
+            else
+                put(down and r - 1 or r + 1, T, down and "▼" or "▲")
+            end
+        end
+
+        local leftcol = api.nvim_win_call(win, vim.fn.winsaveview).leftcol
+        for r, row in pairs(marks) do
+            line(r)
+            for c, ch in pairs(row) do
+                local cell = grid[r][c + 1]
+                if c >= leftcol and (cell == nil or cell == " ") then
+                    api.nvim_buf_set_extmark(buf, ns, r, 0, {
+                        virt_text = { { ch, "DiagnosticInfo" } },
+                        virt_text_win_col = c - leftcol,
+                    })
+                end
+            end
         end
     end, buf)
 end
