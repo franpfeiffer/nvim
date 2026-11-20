@@ -18,8 +18,8 @@ return {
         priority = 1000,
         config = function()
             require('kanagawa').setup({
-                compile = false,             -- enable compiling the colorscheme
-                undercurl = true,            -- enable undercurls
+                compile = false,  -- enable compiling the colorscheme
+                undercurl = true, -- enable undercurls
                 bold = true,
                 italic = {
                     strings = false,
@@ -28,17 +28,15 @@ return {
                     operators = false,
                     folds = false,
                 },
-                transparent = true,         -- do not set background color
-                dimInactive = false,         -- dim inactive window `:h hl-NormalNC`
-                terminalColors = true,       -- define vim.g.terminal_color_{0,17}
-                theme = "dragon",              -- Load "wave" theme
-                background = {               -- map the value of 'background' option to a theme
-                    dark = "dragon",           -- try "dragon" !
+                transparent = true,    -- do not set background color
+                dimInactive = false,   -- dim inactive window `:h hl-NormalNC`
+                terminalColors = true, -- define vim.g.terminal_color_{0,17}
+                theme = "dragon",      -- Load "wave" theme
+                background = {         -- map the value of 'background' option to a theme
+                    dark = "dragon",   -- try "dragon" !
                     light = "lotus"
                 },
             })
-
-            ColorMyPencils("kanagawa")
         end,
 
     },
@@ -49,19 +47,21 @@ return {
             require("tokyonight").setup({
                 -- your configuration comes here
                 -- or leave it empty to use the default settings
-                style = "storm", -- The theme comes in three styles, `storm`, `moon`, a darker variant `night` and `day`
-                transparent = true, -- Enable this to disable setting the background color
-                terminal_colors = true, -- Configure the colors used when opening a `:terminal` in Neovim
+                style = "night",         -- The theme comes in three styles, `storm`, `moon`, a darker variant `night` and `day`
+                transparent = false,     -- Enable this to disable setting the background color
+                terminal_colors = false, -- Configure the colors used when opening a `:terminal` in Neovim
                 styles = {
                     -- Style to be applied to different syntax groups
                     -- Value is any valid attr-list value for `:help nvim_set_hl`
                     comments = { italic = false },
                     keywords = { italic = false },
                     -- Background styles. Can be "dark", "transparent" or "normal"
-                    sidebars = "dark", -- style for sidebars, see below
-                    floats = "dark", -- style for floating windows
+                    sidebars = "transparent", -- style for sidebars, see below
+                    floats = "dark",          -- style for floating windows
                 },
             })
+
+            ColorMyPencils("tokyonight")
         end
     },
     {
@@ -85,7 +85,7 @@ return {
                 invert_signs = false,
                 invert_tabline = false,
                 invert_intend_guides = false,
-                inverse = false, -- invert background for search, diffs, statuslines and errors
+                inverse = false,   -- invert background for search, diffs, statuslines and errors
                 contrast = "hard", -- can be "hard", "soft" or empty string
                 palette_overrides = {},
                 overrides = {},
